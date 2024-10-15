@@ -43,6 +43,10 @@
           };
         });
       };
+      django = hacks.nixpkgsPrebuilt {
+        from = pkgs.python312Packages.django;
+         prev = prev.django;
+      };
     };
     # Inject your own packages on top with overrideScope
     pythonSet =
