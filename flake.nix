@@ -23,6 +23,7 @@
     ...
   }: let
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
+    inherit (pkgs) lib;
     python = pkgs.python312;
     workspace = uv2nix.lib.workspace.loadWorkspace {workspaceRoot = ./.;};
 
@@ -36,7 +37,11 @@
     pyprojectOverlay = final: prev: {
       torch = hacks.nixpkgsPrebuilt {
         from = pkgs.python312Packages.torchWithoutCuda;
-        prev = prev.torch;
+         prev = prev.torch.overrideAttrs(old: {
+          passthru = old.passthru // {
+            dependencies = lib.filterAttrs (name: _: ! lib.hasPrefix "nvidia" name) old.passthru.dependencies;
+          };
+        });
       };
     };
     # Inject your own packages on top with overrideScope
@@ -44,7 +49,7 @@
       (pkgs.callPackage pyproject-nix.build.packages {
         inherit python;
       })
-      .overrideScope (pkgs.lib.composeExtensions overlay pyprojectOverlay);
+      .overrideScope (lib.composeExtensions overlay pyprojectOverlay);
   in {
     packages.x86_64-linux.default = pythonSet.mkVirtualEnv "test-venv" {
       pyproject-nix-cuda-issue = [];
