@@ -24,27 +24,33 @@
   }: let
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
     python = pkgs.python312;
+    workspace = uv2nix.lib.workspace.loadWorkspace {workspaceRoot = ./.;};
 
-    overlay = final: prev: {
-          torch = pyproject-nix.build.hacks.nixpkgsPrebuilt {
-            from = pkgs.python312Packages.torchWithoutCuda;
-            prev = prev.torch;
-          };
+    # Create package overlay from workspace.
+    overlay = workspace.mkPyprojectOverlay {
+      sourcePreference = "wheel"; 
+    };
 
+    hacks = pkgs.callPackages pyproject-nix.build.hacks {};
+
+    pyprojectOverlay = final: prev: {
+      torch = hacks.nixpkgsPrebuilt {
+        from = pkgs.python312Packages.torchWithoutCuda;
+        prev = prev.torch;
       };
+    };
     # Inject your own packages on top with overrideScope
-    pythonSet = (pkgs.callPackage pyproject-nix.build.packages {
-      inherit python;
-    })
-        # .overrideScope(  _f: _p: {pythonPkgsHostHost =overlay;} );
-        .overrideScope overlay;
-
+    pythonSet =
+      (pkgs.callPackage pyproject-nix.build.packages {
+        inherit python;
+      })
+      .overrideScope (pkgs.lib.composeExtensions overlay pyprojectOverlay);
   in {
     packages.x86_64-linux.default = pythonSet.mkVirtualEnv "test-venv" {
-      build = [];
+      pyproject-nix-cuda-issue = [];
     };
     devShells.x86_64-linux.default = pkgs.mkShell {
-        buildInputs = [self.packages.x86_64-linux.default];
-      };
+      buildInputs = [pkgs.uv self.packages.x86_64-linux.default];
+    };
   };
 }
